@@ -1,145 +1,258 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>脱出ゲーム 正誤判定</title>
   <style>
-    body {
-      font-family: "Segoe UI", sans-serif;
-      background: linear-gradient(to bottom, #0f172a, #1e293b);
-      color: white;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      margin: 0;
+    :root{
+      --bg1:#0f172a; --bg2:#1e293b; --panel:rgba(255,255,255,.06);
+      --border:rgba(255,255,255,.12);
+      --ok:#34d399; --ng:#f87171; --ink:#e5e7eb;
     }
-    .container {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 20px;
-      padding: 2rem;
-      width: 90%;
-      max-width: 500px;
-      text-align: center;
-      box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; color:white; font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+      background: radial-gradient(1000px 500px at 10% -10%, #33415555, transparent),
+                  radial-gradient(800px 400px at 110% 10%, #1d4ed855, transparent),
+                  linear-gradient(to bottom,var(--bg1),var(--bg2));
+      overflow:hidden;
     }
-    input {
-      width: 70%;
-      padding: 0.8rem;
-      border-radius: 10px;
-      border: none;
-      outline: none;
-      font-size: 1.2rem;
+    .grid{
+      height:100%; display:grid; place-items:center; padding:16px;
     }
-    button {
-      padding: 0.8rem 1.2rem;
-      margin-left: 0.5rem;
-      border: none;
-      border-radius: 10px;
-      background: #10b981;
-      color: white;
-      font-size: 1rem;
-      cursor: pointer;
+    .card{
+      width:min(720px,92vw);
+      background:var(--panel); border:1px solid var(--border);
+      border-radius:20px; padding:20px 20px 16px; backdrop-filter: blur(6px);
+      position:relative; z-index:2;
     }
-    button:hover { background: #059669; }
-    .result {
-      margin-top: 1.5rem;
-      font-size: 1.5rem;
-      font-weight: bold;
+    h1{margin:0 0 12px; font-size:clamp(20px,3vw,28px); display:flex; gap:10px; align-items:center}
+    .dot{height:10px;width:10px;border-radius:50%; background:#10b981; box-shadow:0 0 10px #10b981aa}
+    .row{display:grid; grid-template-columns:1fr auto; gap:10px}
+    input[type="text"]{
+      width:100%; padding:14px 16px; border-radius:12px; border:1px solid var(--border);
+      background:#0b1220cc; color:#fff; outline:none; font-size:18px;
     }
-    .success { color: #34d399; }
-    .failure { color: #f87171; }
-    canvas {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      pointer-events: none;
+    button{
+      border:none; border-radius:12px; padding:12px 16px; font-weight:600; cursor:pointer;
+      background:#10b981; color:#fff; font-size:16px;
     }
+    button.secondary{background:transparent; border:1px solid var(--border); color:#e5e7eb}
+    .msg{margin:14px 2px 0; font-size:18px; font-weight:700}
+    .ok{color:var(--ok)} .ng{color:var(--ng)}
+    .hint{margin-top:8px; color:#fde68a}
+    .toolbar{display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; font-size:12px; color:#cbd5e1}
+    .toolbar input[type="file"]{background:transparent; color:#cbd5e1}
+    /* 紙吹雪 */
+    .confetti{position:fixed; inset:0; pointer-events:none; z-index:3}
+    /* 妖精（シンプルSVG） */
+    .stage{position:fixed; inset:0; pointer-events:none; z-index:1}
+    .fairy{
+      position:absolute; left:50%; top:50%; translate:-50% -50%;
+      width:min(150px,28vw);
+      filter: drop-shadow(0 0 8px #ffffff80);
+    }
+    /* 羽ぱたぱた */
+    .wing{transform-origin: top right; animation: flap .55s ease-in-out infinite}
+    @keyframes flap{0%,100%{transform: rotate(12deg)} 50%{transform: rotate(-14deg)}}
+    /* 成功=飛び回る */
+    .flying{animation: fly 6s linear infinite}
+    @keyframes fly{
+      0%{transform: translate(-50%, -50%) rotate(0deg)}
+      25%{transform: translate(calc(-50% + 30vw), calc(-50% - 18vh)) rotate(20deg)}
+      50%{transform: translate(calc(-50% + 10vw), calc(-50% + 20vh)) rotate(-15deg)}
+      75%{transform: translate(calc(-50% - 28vw), calc(-50% - 10vh)) rotate(10deg)}
+      100%{transform: translate(-50%, -50%) rotate(0deg)}
+    }
+    /* 失敗=停止＋表情チェンジ */
+    .angry .eye{ry:3}
+    .angry .mouth{d:path("M 45 72 q 16 -8 32 0")}
+    .laugh .mouth{d:path("M 45 72 q 16 18 32 0")}
+    /* 下部フッター */
+    .foot{margin-top:12px; display:flex; justify-content:flex-end; gap:8px}
+    .small{font-size:12px; opacity:.8}
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>脱出ゲーム 正誤判定</h1>
-    <div>
-      <input id="answer" type="text" placeholder="キーワードを入力">
-      <button onclick="checkAnswer()">判定</button>
-      <button onclick="resetForm()">リセット</button>
-    </div>
-    <div id="result" class="result"></div>
+  <canvas id="confetti" class="confetti"></canvas>
+
+  <!-- 妖精ステージ -->
+  <div class="stage" aria-hidden="true">
+    <!-- シンプルなオリジナル妖精SVG（ティンカーベル“風”ではなく独自意匠） -->
+    <svg id="fairy" class="fairy" viewBox="0 0 140 120">
+      <!-- 翼 -->
+      <ellipse class="wing" cx="25" cy="40" rx="22" ry="12" fill="#9ae6b4" opacity=".75"/>
+      <ellipse class="wing" cx="30" cy="52" rx="26" ry="14" fill="#a5f3fc" opacity=".75" style="animation-delay:.1s"/>
+      <!-- 体 -->
+      <circle cx="80" cy="40" r="14" fill="#fde68a" stroke="#fff8" stroke-width="1"/> <!-- 頭 -->
+      <rect x="70" y="54" width="22" height="26" rx="11" fill="#60a5fa"/>
+      <rect x="81" y="78" width="8" height="22" rx="4" fill="#93c5fd"/> <!-- 脚 -->
+      <rect x="73" y="78" width="8" height="22" rx="4" fill="#93c5fd"/>
+      <rect x="60" y="58" width="10" height="18" rx="5" fill="#bfdbfe"/> <!-- 腕 -->
+      <rect x="96" y="58" width="10" height="18" rx="5" fill="#bfdbfe"/>
+      <!-- 顔パーツ（表情切替用にid/class付与） -->
+      <ellipse id="eyeL" class="eye" cx="75" cy="38" rx="2.2" ry="2.2" fill="#0f172a"/>
+      <ellipse id="eyeR" class="eye" cx="85" cy="38" rx="2.2" ry="2.2" fill="#0f172a"/>
+      <path id="mouth" class="mouth" d="M 75 44 q 5 5 10 0" stroke="#0f172a" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+      <!-- きらきら -->
+      <g fill="#fff8">
+        <circle cx="110" cy="30" r="1.6"/><circle cx="20" cy="78" r="1.4"/><circle cx="48" cy="18" r="1.2"/>
+      </g>
+    </svg>
   </div>
-  <canvas id="confetti"></canvas>
+
+  <div class="grid">
+    <div class="card">
+      <h1><span class="dot"></span>脱出ゲーム 正誤判定</h1>
+
+      <div class="row">
+        <input id="answer" type="text" placeholder="キーワードを入力…" />
+        <button id="judgeBtn">判定</button>
+      </div>
+
+      <div id="result" class="msg" aria-live="polite"></div>
+      <div class="foot">
+        <button class="secondary" id="resetBtn">リセット</button>
+      </div>
+
+      <div class="toolbar">
+        <span class="small">（任意）音声ファイルを選択：</span>
+        <label class="small">正解 <input type="file" id="okFile" accept="audio/*"></label>
+        <label class="small">不正解 <input type="file" id="ngFile" accept="audio/*"></label>
+      </div>
+    </div>
+  </div>
+
+  <audio id="okAudio" preload="auto"></audio>
+  <audio id="ngAudio" preload="auto"></audio>
 
   <script>
-    const correctKeywords = ["マクロ", "macro", "ＭＡＣＲＯ"];
+    // ====== 設定 ======
+    const MACRO_KEYWORDS = ["マクロ"]; // 正解ワード（必要なら追加）
+    // 事前にリポジトリへ音声を置くなら↓のファイル名を指定（なければ空のままでOK）
+    const PRESET_OK_AUDIO = "success.mp3";   // 例: 成功音
+    const PRESET_NG_AUDIO = "fail.mp3";      // 例: 失敗音
 
-    function normalize(str) {
-      return str.trim()
+    // ====== ユーティリティ ======
+    const normalize = (s) =>
+      s.trim()
         .toLowerCase()
-        .replace(/[Ａ-Ｚａ-ｚ０-９]/g, ch => 
-          String.fromCharCode(ch.charCodeAt(0) - 0xfee0));
+        .replace(/\u3000/g, " ")
+        .replace(/[Ａ-Ｚａ-ｚ０-９]/g, ch =>
+          String.fromCharCode(ch.charCodeAt(0) - 0xfee0)
+        );
+
+    // ====== 要素参照 ======
+    const inputEl = document.getElementById("answer");
+    const resultEl = document.getElementById("result");
+    const fairy = document.getElementById("fairy");
+    const okAudio = document.getElementById("okAudio");
+    const ngAudio = document.getElementById("ngAudio");
+    const okFile = document.getElementById("okFile");
+    const ngFile = document.getElementById("ngFile");
+    const confetti = document.getElementById("confetti");
+    const ctx = confetti.getContext("2d");
+
+    // 音声の初期化（プリセットがある場合）
+    if (PRESET_OK_AUDIO) okAudio.src = PRESET_OK_AUDIO;
+    if (PRESET_NG_AUDIO) ngAudio.src = PRESET_NG_AUDIO;
+
+    // 当日その場でファイル選択にも対応
+    okFile.addEventListener("change", (e) => {
+      const f = e.target.files?.[0]; if (!f) return;
+      okAudio.src = URL.createObjectURL(f);
+    });
+    ngFile.addEventListener("change", (e) => {
+      const f = e.target.files?.[0]; if (!f) return;
+      ngAudio.src = URL.createObjectURL(f);
+    });
+
+    // 画面サイズに応じて紙吹雪キャンバスを更新
+    const resize = () => { confetti.width = innerWidth; confetti.height = innerHeight; };
+    addEventListener("resize", resize); resize();
+
+    // 紙吹雪
+    function launchConfetti() {
+      const parts = Array.from({length: 150}, () => ({
+        x: Math.random()*confetti.width,
+        y: -10,
+        w: 5, h: 10,
+        color: `hsl(${Math.random()*360},100%,70%)`,
+        speed: 2+Math.random()*4,
+        rot: Math.random()*360,
+        rv: -3+Math.random()*6
+      }));
+      const tick = () => {
+        ctx.clearRect(0,0,confetti.width,confetti.height);
+        parts.forEach(p=>{
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rot*Math.PI/180);
+          ctx.fillStyle=p.color;
+          ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+          ctx.restore();
+          p.y += p.speed; p.rot += p.rv;
+        });
+        if (parts.some(p=>p.y<confetti.height)) requestAnimationFrame(tick);
+      };
+      tick();
     }
 
-    function checkAnswer() {
-      const value = document.getElementById("answer").value;
-      const user = normalize(value);
-      const correct = correctKeywords.map(k => normalize(k));
-      const result = document.getElementById("result");
-
-      if (correct.includes(user)) {
-        result.textContent = "脱出成功！🎉";
-        result.className = "result success";
-        launchConfetti();
-      } else {
-        result.textContent = "残念…もう一歩！";
-        result.className = "result failure";
+    // 妖精の表情切替
+    function setFairyMode(mode){
+      fairy.classList.remove("flying","angry","laugh");
+      const mouth = fairy.querySelector("#mouth");
+      if(mode==="ok"){
+        fairy.classList.add("flying");
+        mouth.setAttribute("d","M 75 44 q 5 5 10 0"); // にっこり
+      }else if(mode==="angry"){
+        fairy.classList.add("angry");
+        mouth.setAttribute("d","M 45 72 q 16 -8 32 0");
+      }else if(mode==="laugh"){
+        fairy.classList.add("laugh");
+        mouth.setAttribute("d","M 45 72 q 16 18 32 0");
       }
     }
 
-    function resetForm() {
-      document.getElementById("answer").value = "";
-      document.getElementById("result").textContent = "";
-      clearCanvas();
+    // 判定
+    function judge(){
+      const user = normalize(inputEl.value);
+      const answers = MACRO_KEYWORDS.map(k=>normalize(k));
+      const ok = answers.includes(user);
+
+      if(ok){
+        resultEl.textContent = "大正解！みんなをもとの大きさに戻してあげる";
+        resultEl.className = "msg ok";
+        setFairyMode("ok");
+        okAudio.currentTime = 0; okAudio.play().catch(()=>{});
+        launchConfetti();
+      }else{
+        resultEl.textContent = "残念。不正解。また挑戦してね。ばいばい。";
+        resultEl.className = "msg ng";
+        // 「こわい顔」か「わらい顔」をランダム
+        setFairyMode(Math.random()<0.5 ? "angry" : "laugh");
+        ngAudio.currentTime = 0; ngAudio.play().catch(()=>{});
+      }
     }
 
-    // 🎊 簡易コンフェッティ
-    const canvas = document.getElementById("confetti");
-    const ctx = canvas.getContext("2d");
-    let particles = [];
-    resize();
-    window.addEventListener("resize", resize);
-
-    function resize() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+    function resetAll(){
+      inputEl.value = "";
+      resultEl.textContent = "";
+      resultEl.className = "msg";
+      setFairyMode("ok"); // デフォは穏やか
+      ctx.clearRect(0,0,confetti.width,confetti.height);
+      inputEl.focus();
     }
 
-    function launchConfetti() {
-      particles = Array.from({ length: 150 }, () => ({
-        x: Math.random() * canvas.width,
-        y: -10,
-        w: 5,
-        h: 10,
-        color: `hsl(${Math.random()*360},100%,70%)`,
-        speed: 2 + Math.random()*4
-      }));
-      animate();
-    }
+    document.getElementById("judgeBtn").addEventListener("click", judge);
+    document.getElementById("resetBtn").addEventListener("click", resetAll);
+    inputEl.addEventListener("keydown",(e)=>{ if(e.key==="Enter") judge(); });
 
-    function animate() {
-      clearCanvas();
-      particles.forEach(p => {
-        ctx.fillStyle = p.color;
-        ctx.fillRect(p.x, p.y, p.w, p.h);
-        p.y += p.speed;
-      });
-      particles = particles.filter(p => p.y < canvas.height);
-      if (particles.length > 0) requestAnimationFrame(animate);
-    }
-
-    function clearCanvas() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
+    // 初期
+    setFairyMode("ok");
+    inputEl.focus();
   </script>
 </body>
 </html>
