@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>脱出ゲーム 正誤判定</title>
+  <style>
+    body {
+      font-family: "Segoe UI", sans-serif;
+      background: linear-gradient(to bottom, #0f172a, #1e293b);
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .container {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 2rem;
+      width: 90%;
+      max-width: 500px;
+      text-align: center;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+    }
+    input {
+      width: 70%;
+      padding: 0.8rem;
+      border-radius: 10px;
+      border: none;
+      outline: none;
+      font-size: 1.2rem;
+    }
+    button {
+      padding: 0.8rem 1.2rem;
+      margin-left: 0.5rem;
+      border: none;
+      border-radius: 10px;
+      background: #10b981;
+      color: white;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    button:hover { background: #059669; }
+    .result {
+      margin-top: 1.5rem;
+      font-size: 1.5rem;
+      font-weight: bold;
+    }
+    .success { color: #34d399; }
+    .failure { color: #f87171; }
+    canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>脱出ゲーム 正誤判定</h1>
+    <div>
+      <input id="answer" type="text" placeholder="キーワードを入力">
+      <button onclick="checkAnswer()">判定</button>
+      <button onclick="resetForm()">リセット</button>
+    </div>
+    <div id="result" class="result"></div>
+  </div>
+  <canvas id="confetti"></canvas>
+
+  <script>
+    const correctKeywords = ["マクロ", "macro", "ＭＡＣＲＯ"];
+
+    function normalize(str) {
+      return str.trim()
+        .toLowerCase()
+        .replace(/[Ａ-Ｚａ-ｚ０-９]/g, ch => 
+          String.fromCharCode(ch.charCodeAt(0) - 0xfee0));
+    }
+
+    function checkAnswer() {
+      const value = document.getElementById("answer").value;
+      const user = normalize(value);
+      const correct = correctKeywords.map(k => normalize(k));
+      const result = document.getElementById("result");
+
+      if (correct.includes(user)) {
+        result.textContent = "脱出成功！🎉";
+        result.className = "result success";
+        launchConfetti();
+      } else {
+        result.textContent = "残念…もう一歩！";
+        result.className = "result failure";
+      }
+    }
+
+    function resetForm() {
+      document.getElementById("answer").value = "";
+      document.getElementById("result").textContent = "";
+      clearCanvas();
+    }
+
+    // 🎊 簡易コンフェッティ
+    const canvas = document.getElementById("confetti");
+    const ctx = canvas.getContext("2d");
+    let particles = [];
+    resize();
+    window.addEventListener("resize", resize);
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+
+    function launchConfetti() {
+      particles = Array.from({ length: 150 }, () => ({
+        x: Math.random() * canvas.width,
+        y: -10,
+        w: 5,
+        h: 10,
+        color: `hsl(${Math.random()*360},100%,70%)`,
+        speed: 2 + Math.random()*4
+      }));
+      animate();
+    }
+
+    function animate() {
+      clearCanvas();
+      particles.forEach(p => {
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, p.w, p.h);
+        p.y += p.speed;
+      });
+      particles = particles.filter(p => p.y < canvas.height);
+      if (particles.length > 0) requestAnimationFrame(animate);
+    }
+
+    function clearCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  </script>
+</body>
+</html>
