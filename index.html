@@ -10,7 +10,7 @@
   *{box-sizing:border-box}
   html,body{height:100%; margin:0; color:#fff;
     font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;}
-  /* 幻想的な背景 + きらめき */
+  /* 幻想背景＋きらめき */
   body{
     background:
       radial-gradient(1100px 550px at 10% -10%, #60a5fa22, transparent 60%),
@@ -82,7 +82,8 @@
 
   <!-- 妖精（画像3枚） -->
   <div class="stage" aria-hidden="true">
-    <img id="fairy" class="fairy" src="fairy_idle.png" alt="fairy">
+    <!-- 初期も .png.png を参照 -->
+    <img id="fairy" class="fairy" src="fairy_idle.png.png" alt="fairy">
   </div>
 
   <!-- UI -->
@@ -111,20 +112,23 @@
   /* ===== 基本設定 ===== */
   const MACRO_KEYWORDS = ["マクロ"];       // 正解ワード
   const AUTO_RESET_MS   = 10000;           // 10秒で自動リセット
-  const ASSET_BASE      = "";              // 画像/音声をフォルダに入れたら "assets/" のように指定
+  const ASSET_BASE      = "";              // フォルダに入れたら "assets/" などを指定
 
-  // 正式名（直下に置いた想定）
+  // いまの実ファイル名（.png.png）に合わせた参照
   const FILES = {
-    idle:  ASSET_BASE + "fairy_idle.png",
-    smile: ASSET_BASE + "fairy_smile.png",
-    angry: ASSET_BASE + "fairy_angry.png",
+    idle:  ASSET_BASE + "fairy_idle.png.png",
+    smile: ASSET_BASE + "fairy_smile.png.png",
+    angry: ASSET_BASE + "fairy_angry.png.png",
   };
 
-  // 旧ファイル名が残っている場合のフォールバック候補（必要に応じて増減OK）
+  // 将来 .png に直したり、ChatGPT Image…名が残っていても動くフォールバック
   const FALLBACKS = {
-    idle:  [ASSET_BASE + "ChatGPT Image 2025年9月19日 13_29_59.png"],
-    smile: [ASSET_BASE + "ChatGPT Image 2025年9月19日 13_30_03.png"],
-    angry: [ASSET_BASE + "ChatGPT Image 2025年9月19日 13_30_08.png"],
+    idle:  [ASSET_BASE + "fairy_idle.png",
+            ASSET_BASE + "ChatGPT Image 2025年9月19日 13_29_59.png"],
+    smile: [ASSET_BASE + "fairy_smile.png",
+            ASSET_BASE + "ChatGPT Image 2025年9月19日 13_30_03.png"],
+    angry: [ASSET_BASE + "fairy_angry.png",
+            ASSET_BASE + "ChatGPT Image 2025年9月19日 13_30_08.png"],
   };
 
   // 音声（置いた場合だけ自動再生）
@@ -142,13 +146,13 @@
   const confetti  = document.getElementById("confetti");
   const ctx       = confetti.getContext("2d");
 
-  // プリロード
+  // プリロード（チラつき防止）
   [...new Set([FILES.idle, FILES.smile, FILES.angry,
-    ...FALLBACKS.idle, ...FALLBACKS.smile, ...FALLBACKS.angry])].forEach(src=>{
-      const i=new Image(); i.src=src;
-  });
+    ...FALLBACKS.idle, ...FALLBACKS.smile, ...FALLBACKS.angry])]
+    .filter(Boolean)
+    .forEach(src => { const i=new Image(); i.src=src; });
 
-  // 音声の初期化（存在するなら再生される）
+  // 音声の初期化（存在すれば使われる）
   if (PRESET_OK_AUDIO) okAudio.src = PRESET_OK_AUDIO;
   if (PRESET_NG_AUDIO) ngAudio.src = PRESET_NG_AUDIO;
   okFile?.addEventListener("change", e => { const f=e.target.files?.[0]; if(f) okAudio.src=URL.createObjectURL(f); });
@@ -160,96 +164,4 @@
      .replace(/\u3000/g," ")
      .replace(/[Ａ-Ｚａ-ｚ０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0)-0xFEE0));
 
-  const resize = ()=>{ confetti.width = innerWidth; confetti.height = innerHeight; };
-  addEventListener("resize", resize); resize();
-
-  function launchConfetti(){
-    const parts = Array.from({length: 150}, () => ({
-      x: Math.random()*confetti.width, y: -10,
-      w: 5, h: 10,
-      color: `hsl(${Math.random()*360},100%,70%)`,
-      speed: 2+Math.random()*4, rot: Math.random()*360, rv: -3+Math.random()*6
-    }));
-    const tick = () => {
-      ctx.clearRect(0,0,confetti.width,confetti.height);
-      parts.forEach(p=>{
-        ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot*Math.PI/180);
-        ctx.fillStyle=p.color; ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
-        ctx.restore(); p.y+=p.speed; p.rot+=p.rv;
-      });
-      if (parts.some(p=>p.y<confetti.height)) requestAnimationFrame(tick);
-    };
-    tick();
-  }
-
-  // フォールバックしながら画像を差し替え
-  function setImgWithFallback(el, primary, alts = []) {
-    const candidates = [primary, ...alts].filter(Boolean);
-    let i = 0;
-    const trySet = () => {
-      el.onerror = () => { i++; if (i < candidates.length) trySet(); };
-      el.src = candidates[i];
-    };
-    trySet();
-  }
-
-  /* ===== 表情＆動き（3画像） ===== */
-  function setFairyIdle(){          // 初期：右中で静止
-    fairy.classList.remove("flying");
-    setImgWithFallback(fairy, FILES.idle,  FALLBACKS.idle);
-    fairy.style.left = "auto"; fairy.style.right = "8%";
-    fairy.style.top  = "50%";  fairy.style.transform = "translate(0,-50%)";
-  }
-  function setFairySmileFly(){      // 正解：笑顔で飛び回る
-    setImgWithFallback(fairy, FILES.smile, FALLBACKS.smile);
-    fairy.classList.add("flying");
-    fairy.style.left="50%"; fairy.style.right="auto";
-    fairy.style.top="50%";
-  }
-  function setFairyAngryStay(){     // 不正解：右中で嫌な顔・静止
-    fairy.classList.remove("flying");
-    setImgWithFallback(fairy, FILES.angry, FALLBACKS.angry);
-    fairy.style.left="auto"; fairy.style.right="8%";
-    fairy.style.top="50%";  fairy.style.transform="translate(0,-50%)";
-  }
-
-  /* ===== 判定＆自動リセット ===== */
-  let resetTimer = null;
-  function judge(){
-    clearTimeout(resetTimer);
-    const user = normalize(inputEl.value);
-    const ok = MACRO_KEYWORDS.map(k=>normalize(k)).includes(user);
-
-    if (ok){
-      resultEl.innerHTML = "大正解！みんなをもとの大きさに戻してあげる<br><span class='small'>※これで脱出ゲームは終了です。出口からおかえりください。</span>";
-      resultEl.className = "msg ok";
-      setFairySmileFly();
-      okAudio.currentTime = 0; okAudio.play().catch(()=>{});
-      launchConfetti();
-    } else {
-      resultEl.innerHTML = "残念。不正解。また挑戦してね。ばいばい。<br><span class='small'>※もう一度謎解きをしてみてください。ギブアップするときには出口から出てかまいません。</span>";
-      resultEl.className = "msg ng";
-      setFairyAngryStay();
-      ngAudio.currentTime = 0; ngAudio.play().catch(()=>{});
-    }
-    resetTimer = setTimeout(resetAll, AUTO_RESET_MS);
-  }
-
-  function resetAll(){
-    clearTimeout(resetTimer);
-    inputEl.value = "";
-    resultEl.textContent = "";
-    resultEl.className = "msg";
-    setFairyIdle();
-    ctx.clearRect(0,0,confetti.width,confetti.height);
-    inputEl.focus();
-  }
-
-  document.getElementById("judgeBtn").addEventListener("click", judge);
-  inputEl.addEventListener("keydown", e => { if (e.key === "Enter") judge(); });
-
-  // 初期化
-  setFairyIdle(); inputEl.focus();
-</script>
-</body>
-</html>
+  const resize = ()=>{
