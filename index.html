@@ -10,7 +10,7 @@
   *{box-sizing:border-box}
   html,body{height:100%; margin:0; color:#fff;
     font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;}
-  /* 幻想的な背景 */
+  /* 幻想的な背景 + きらめき */
   body{
     background:
       radial-gradient(1100px 550px at 10% -10%, #60a5fa22, transparent 60%),
@@ -32,6 +32,7 @@
   .twinkle::after{ animation-delay:3s; opacity:.7 }
   @keyframes shimmer { 0%,100%{opacity:.35} 50%{opacity:.8} }
 
+  /* UI */
   .grid{height:100%; display:grid; place-items:center; padding:16px; position:relative; z-index:2;}
   .card{
     width:min(720px,92vw);
@@ -42,186 +43,4 @@
   .dot{height:10px;width:10px;border-radius:50%; background:#10b981; box-shadow:0 0 10px #10b981aa}
   .row{display:grid; grid-template-columns:1fr auto; gap:10px}
   input[type="text"]{
-    width:100%; padding:14px 16px; border-radius:12px; border:1px solid var(--border);
-    background:#0b1220cc; color:#fff; outline:none; font-size:18px;
-  }
-  button{border:none; border-radius:12px; padding:12px 16px; font-weight:600; cursor:pointer;
-    background:#10b981; color:#fff; font-size:16px;}
-
-  .msg{margin:14px 2px 0; font-size:18px; font-weight:700}
-  .ok{color:var(--ok)} .ng{color:var(--ng)}
-  .small{font-size:12px; opacity:.85}
-  .toolbar{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
-
-  /* 紙吹雪 */
-  .confetti{position:fixed; inset:0; pointer-events:none; z-index:6}
-
-  /* 妖精（画像3枚で制御） */
-  .stage{position:fixed; inset:0; pointer-events:none; z-index:5}
-  .fairy{
-    position:fixed; top:50%; right:8%; transform:translate(0,-50%); /* 初期＝右中央で静止 */
-    width:min(200px,30vw); filter:drop-shadow(0 0 10px #ffffff90);
-  }
-  /* 正解＝画面を飛び回る（画像は差し替え、動きはCSS） */
-  .flying{ left:50% !important; right:auto !important; animation: fly 7s linear infinite }
-  @keyframes fly{
-    0%{ transform: translate(-50%, -50%) rotate(0deg) }
-    25%{ transform: translate(calc(-50% + 32vw), calc(-50% - 16vh)) rotate(16deg) }
-    50%{ transform: translate(calc(-50% + 6vw),  calc(-50% + 22vh)) rotate(-12deg) }
-    75%{ transform: translate(calc(-50% - 28vw), calc(-50% - 12vh)) rotate(10deg) }
-    100%{ transform: translate(-50%, -50%) rotate(0deg) }
-  }
-</style>
-</head>
-<body>
-  <div class="twinkle"></div>
-
-  <!-- 紙吹雪 -->
-  <canvas id="confetti" class="confetti"></canvas>
-
-  <!-- 妖精（画像3枚） -->
-  <div class="stage" aria-hidden="true">
-    <img id="fairy" class="fairy" src="fairy_idle.png" alt="fairy">
-  </div>
-
-  <!-- UI -->
-  <div class="grid">
-    <div class="card">
-      <h1><span class="dot"></span>脱出ゲーム 正誤判定</h1>
-      <div class="row">
-        <input id="answer" type="text" placeholder="キーワードを入力…" />
-        <button id="judgeBtn">判定</button>
-      </div>
-      <div id="result" class="msg" aria-live="polite"></div>
-
-      <!-- 任意：当日その場で音声を読み込みたい場合だけ使う -->
-      <div class="toolbar small">
-        <span>（任意）音声ファイル選択：</span>
-        <label>正解 <input type="file" id="okFile" accept="audio/*"></label>
-        <label>不正解 <input type="file" id="ngFile" accept="audio/*"></label>
-      </div>
-    </div>
-  </div>
-
-  <audio id="okAudio" preload="auto"></audio>
-  <audio id="ngAudio" preload="auto"></audio>
-
-<script>
-  /* ===== 設定 ===== */
-  const MACRO_KEYWORDS = ["マクロ"];       // 正解ワード
-  const PRESET_OK_AUDIO = "success.mp3";   // 置いてあれば自動再生（任意）
-  const PRESET_NG_AUDIO = "fail.mp3";      // 置いてあれば自動再生（任意）
-  const AUTO_RESET_MS = 10000;             // 10秒で自動リセット
-
-  /* ===== 要素 ===== */
-  const inputEl   = document.getElementById("answer");
-  const resultEl  = document.getElementById("result");
-  const fairy     = document.getElementById("fairy");
-  const okAudio   = document.getElementById("okAudio");
-  const ngAudio   = document.getElementById("ngAudio");
-  const okFile    = document.getElementById("okFile");
-  const ngFile    = document.getElementById("ngFile");
-  const confetti  = document.getElementById("confetti");
-  const ctx       = confetti.getContext("2d");
-
-  // 画像プリロード（切替時のチラツキ防止）
-  ["fairy_idle.png","fairy_smile.png","fairy_angry.png"].forEach(src=>{const i=new Image(); i.src=src;});
-
-  if (PRESET_OK_AUDIO) okAudio.src = PRESET_OK_AUDIO;
-  if (PRESET_NG_AUDIO) ngAudio.src = PRESET_NG_AUDIO;
-
-  okFile.addEventListener("change", e => {
-    const f = e.target.files?.[0]; if (f) okAudio.src = URL.createObjectURL(f);
-  });
-  ngFile.addEventListener("change", e => {
-    const f = e.target.files?.[0]; if (f) ngAudio.src = URL.createObjectURL(f);
-  });
-
-  /* ===== ユーティリティ ===== */
-  const normalize = s =>
-    s.trim().toLowerCase()
-     .replace(/\u3000/g," ")
-     .replace(/[Ａ-Ｚａ-ｚ０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0)-0xFEE0));
-
-  const resize = ()=>{ confetti.width = innerWidth; confetti.height = innerHeight; };
-  addEventListener("resize", resize); resize();
-
-  function launchConfetti(){
-    const parts = Array.from({length: 150}, () => ({
-      x: Math.random()*confetti.width, y: -10,
-      w: 5, h: 10,
-      color: `hsl(${Math.random()*360},100%,70%)`,
-      speed: 2+Math.random()*4, rot: Math.random()*360, rv: -3+Math.random()*6
-    }));
-    const tick = () => {
-      ctx.clearRect(0,0,confetti.width,confetti.height);
-      parts.forEach(p=>{
-        ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot*Math.PI/180);
-        ctx.fillStyle=p.color; ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
-        ctx.restore(); p.y+=p.speed; p.rot+=p.rv;
-      });
-      if (parts.some(p=>p.y<confetti.height)) requestAnimationFrame(tick);
-    };
-    tick();
-  }
-
-  /* ===== 表情＆動き（3画像版） ===== */
-  function setFairyIdle(){          // 初期：右中で静止
-    fairy.classList.remove("flying");
-    fairy.src = "fairy_idle.png";
-    fairy.style.left = "auto"; fairy.style.right = "8%";
-    fairy.style.top  = "50%";  fairy.style.transform = "translate(0,-50%)";
-  }
-  function setFairySmileFly(){      // 正解：笑顔で飛び回る
-    fairy.src = "fairy_smile.png";
-    fairy.classList.add("flying");
-    fairy.style.left="50%"; fairy.style.right="auto";
-    fairy.style.top="50%";
-  }
-  function setFairyAngryStay(){     // 不正解：右中で嫌な顔・静止
-    fairy.classList.remove("flying");
-    fairy.src = "fairy_angry.png";
-    fairy.style.left="auto"; fairy.style.right="8%";
-    fairy.style.top="50%";  fairy.style.transform="translate(0,-50%)";
-  }
-
-  /* ===== 判定＆自動リセット ===== */
-  let resetTimer = null;
-  function judge(){
-    clearTimeout(resetTimer);
-    const user = normalize(inputEl.value);
-    const ok = MACRO_KEYWORDS.map(k=>normalize(k)).includes(user);
-
-    if (ok){
-      resultEl.innerHTML = "大正解！みんなをもとの大きさに戻してあげる<br><span class='small'>※これで脱出ゲームは終了です。出口からおかえりください。</span>";
-      resultEl.className = "msg ok";
-      setFairySmileFly();
-      okAudio.currentTime = 0; okAudio.play().catch(()=>{});
-      launchConfetti();
-    } else {
-      resultEl.innerHTML = "残念。不正解。また挑戦してね。ばいばい。<br><span class='small'>※もう一度謎解きをしてみてください。ギブアップするときには出口から出てかまいません。</span>";
-      resultEl.className = "msg ng";
-      setFairyAngryStay();
-      ngAudio.currentTime = 0; ngAudio.play().catch(()=>{});
-    }
-    resetTimer = setTimeout(resetAll, AUTO_RESET_MS);
-  }
-
-  function resetAll(){
-    clearTimeout(resetTimer);
-    inputEl.value = "";
-    resultEl.textContent = "";
-    resultEl.className = "msg";
-    setFairyIdle();
-    ctx.clearRect(0,0,confetti.width,confetti.height);
-    inputEl.focus();
-  }
-
-  document.getElementById("judgeBtn").addEventListener("click", judge);
-  inputEl.addEventListener("keydown", e => { if (e.key === "Enter") judge(); });
-
-  // 初期化
-  setFairyIdle(); inputEl.focus();
-</script>
-</body>
-</html>
+    width:100%; padding:14px 16px; border
