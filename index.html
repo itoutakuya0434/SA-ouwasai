@@ -43,4 +43,213 @@
   .dot{height:10px;width:10px;border-radius:50%; background:#10b981; box-shadow:0 0 10px #10b981aa}
   .row{display:grid; grid-template-columns:1fr auto; gap:10px}
   input[type="text"]{
-    width:100%; padding:14px 16px; border
+    width:100%; padding:14px 16px; border-radius:12px; border:1px solid var(--border);
+    background:#0b1220cc; color:#fff; outline:none; font-size:18px;
+  }
+  button{border:none; border-radius:12px; padding:12px 16px; font-weight:600; cursor:pointer;
+    background:#10b981; color:#fff; font-size:16px;}
+
+  .msg{margin:14px 2px 0; font-size:18px; font-weight:700}
+  .ok{color:var(--ok)} .ng{color:var(--ng)}
+  .small{font-size:12px; opacity:.85}
+  .toolbar{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
+
+  /* 紙吹雪 */
+  .confetti{position:fixed; inset:0; pointer-events:none; z-index:6}
+
+  /* 妖精（画像3枚） */
+  .stage{position:fixed; inset:0; pointer-events:none; z-index:5}
+  .fairy{
+    position:fixed; top:50%; right:8%; transform:translate(0,-50%); /* 初期＝右中央で静止 */
+    width:min(200px,30vw); filter:drop-shadow(0 0 10px #ffffff90);
+  }
+  /* 正解＝画面を飛び回る（画像は差し替え、動きはCSS） */
+  .flying{ left:50% !important; right:auto !important; animation: fly 7s linear infinite }
+  @keyframes fly{
+    0%{ transform: translate(-50%, -50%) rotate(0deg) }
+    25%{ transform: translate(calc(-50% + 32vw), calc(-50% - 16vh)) rotate(16deg) }
+    50%{ transform: translate(calc(-50% + 6vw),  calc(-50% + 22vh)) rotate(-12deg) }
+    75%{ transform: translate(calc(-50% - 28vw), calc(-50% - 12vh)) rotate(10deg) }
+    100%{ transform: translate(-50%, -50%) rotate(0deg) }
+  }
+</style>
+</head>
+<body>
+  <div class="twinkle"></div>
+
+  <!-- 紙吹雪 -->
+  <canvas id="confetti" class="confetti"></canvas>
+
+  <!-- 妖精（画像3枚） -->
+  <div class="stage" aria-hidden="true">
+    <img id="fairy" class="fairy" src="fairy_idle.png" alt="fairy">
+  </div>
+
+  <!-- UI -->
+  <div class="grid">
+    <div class="card">
+      <h1><span class="dot"></span>脱出ゲーム 正誤判定</h1>
+      <div class="row">
+        <input id="answer" type="text" placeholder="キーワードを入力…" />
+        <button id="judgeBtn">判定</button>
+      </div>
+      <div id="result" class="msg" aria-live="polite"></div>
+
+      <!-- 任意：当日その場で音声を読み込みたい場合だけ使う -->
+      <div class="toolbar small">
+        <span>（任意）音声ファイル選択：</span>
+        <label>正解 <input type="file" id="okFile" accept="audio/*"></label>
+        <label>不正解 <input type="file" id="ngFile" accept="audio/*"></label>
+      </div>
+    </div>
+  </div>
+
+  <audio id="okAudio" preload="auto"></audio>
+  <audio id="ngAudio" preload="auto"></audio>
+
+<script>
+  /* ===== 基本設定 ===== */
+  const MACRO_KEYWORDS = ["マクロ"];       // 正解ワード
+  const AUTO_RESET_MS   = 10000;           // 10秒で自動リセット
+  const ASSET_BASE      = "";              // 画像/音声をフォルダに入れたら "assets/" のように指定
+
+  // 正式名（直下に置いた想定）
+  const FILES = {
+    idle:  ASSET_BASE + "fairy_idle.png",
+    smile: ASSET_BASE + "fairy_smile.png",
+    angry: ASSET_BASE + "fairy_angry.png",
+  };
+
+  // 旧ファイル名が残っている場合のフォールバック候補（必要に応じて増減OK）
+  const FALLBACKS = {
+    idle:  [ASSET_BASE + "ChatGPT Image 2025年9月19日 13_29_59.png"],
+    smile: [ASSET_BASE + "ChatGPT Image 2025年9月19日 13_30_03.png"],
+    angry: [ASSET_BASE + "ChatGPT Image 2025年9月19日 13_30_08.png"],
+  };
+
+  // 音声（置いた場合だけ自動再生）
+  const PRESET_OK_AUDIO = ASSET_BASE + "success.mp3";
+  const PRESET_NG_AUDIO = ASSET_BASE + "fail.mp3";
+
+  /* ===== 要素 ===== */
+  const inputEl   = document.getElementById("answer");
+  const resultEl  = document.getElementById("result");
+  const fairy     = document.getElementById("fairy");
+  const okAudio   = document.getElementById("okAudio");
+  const ngAudio   = document.getElementById("ngAudio");
+  const okFile    = document.getElementById("okFile");
+  const ngFile    = document.getElementById("ngFile");
+  const confetti  = document.getElementById("confetti");
+  const ctx       = confetti.getContext("2d");
+
+  // プリロード
+  [...new Set([FILES.idle, FILES.smile, FILES.angry,
+    ...FALLBACKS.idle, ...FALLBACKS.smile, ...FALLBACKS.angry])].forEach(src=>{
+      const i=new Image(); i.src=src;
+  });
+
+  // 音声の初期化（存在するなら再生される）
+  if (PRESET_OK_AUDIO) okAudio.src = PRESET_OK_AUDIO;
+  if (PRESET_NG_AUDIO) ngAudio.src = PRESET_NG_AUDIO;
+  okFile?.addEventListener("change", e => { const f=e.target.files?.[0]; if(f) okAudio.src=URL.createObjectURL(f); });
+  ngFile?.addEventListener("change", e => { const f=e.target.files?.[0]; if(f) ngAudio.src=URL.createObjectURL(f); });
+
+  /* ===== ユーティリティ ===== */
+  const normalize = s =>
+    s.trim().toLowerCase()
+     .replace(/\u3000/g," ")
+     .replace(/[Ａ-Ｚａ-ｚ０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0)-0xFEE0));
+
+  const resize = ()=>{ confetti.width = innerWidth; confetti.height = innerHeight; };
+  addEventListener("resize", resize); resize();
+
+  function launchConfetti(){
+    const parts = Array.from({length: 150}, () => ({
+      x: Math.random()*confetti.width, y: -10,
+      w: 5, h: 10,
+      color: `hsl(${Math.random()*360},100%,70%)`,
+      speed: 2+Math.random()*4, rot: Math.random()*360, rv: -3+Math.random()*6
+    }));
+    const tick = () => {
+      ctx.clearRect(0,0,confetti.width,confetti.height);
+      parts.forEach(p=>{
+        ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot*Math.PI/180);
+        ctx.fillStyle=p.color; ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+        ctx.restore(); p.y+=p.speed; p.rot+=p.rv;
+      });
+      if (parts.some(p=>p.y<confetti.height)) requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  // フォールバックしながら画像を差し替え
+  function setImgWithFallback(el, primary, alts = []) {
+    const candidates = [primary, ...alts].filter(Boolean);
+    let i = 0;
+    const trySet = () => {
+      el.onerror = () => { i++; if (i < candidates.length) trySet(); };
+      el.src = candidates[i];
+    };
+    trySet();
+  }
+
+  /* ===== 表情＆動き（3画像） ===== */
+  function setFairyIdle(){          // 初期：右中で静止
+    fairy.classList.remove("flying");
+    setImgWithFallback(fairy, FILES.idle,  FALLBACKS.idle);
+    fairy.style.left = "auto"; fairy.style.right = "8%";
+    fairy.style.top  = "50%";  fairy.style.transform = "translate(0,-50%)";
+  }
+  function setFairySmileFly(){      // 正解：笑顔で飛び回る
+    setImgWithFallback(fairy, FILES.smile, FALLBACKS.smile);
+    fairy.classList.add("flying");
+    fairy.style.left="50%"; fairy.style.right="auto";
+    fairy.style.top="50%";
+  }
+  function setFairyAngryStay(){     // 不正解：右中で嫌な顔・静止
+    fairy.classList.remove("flying");
+    setImgWithFallback(fairy, FILES.angry, FALLBACKS.angry);
+    fairy.style.left="auto"; fairy.style.right="8%";
+    fairy.style.top="50%";  fairy.style.transform="translate(0,-50%)";
+  }
+
+  /* ===== 判定＆自動リセット ===== */
+  let resetTimer = null;
+  function judge(){
+    clearTimeout(resetTimer);
+    const user = normalize(inputEl.value);
+    const ok = MACRO_KEYWORDS.map(k=>normalize(k)).includes(user);
+
+    if (ok){
+      resultEl.innerHTML = "大正解！みんなをもとの大きさに戻してあげる<br><span class='small'>※これで脱出ゲームは終了です。出口からおかえりください。</span>";
+      resultEl.className = "msg ok";
+      setFairySmileFly();
+      okAudio.currentTime = 0; okAudio.play().catch(()=>{});
+      launchConfetti();
+    } else {
+      resultEl.innerHTML = "残念。不正解。また挑戦してね。ばいばい。<br><span class='small'>※もう一度謎解きをしてみてください。ギブアップするときには出口から出てかまいません。</span>";
+      resultEl.className = "msg ng";
+      setFairyAngryStay();
+      ngAudio.currentTime = 0; ngAudio.play().catch(()=>{});
+    }
+    resetTimer = setTimeout(resetAll, AUTO_RESET_MS);
+  }
+
+  function resetAll(){
+    clearTimeout(resetTimer);
+    inputEl.value = "";
+    resultEl.textContent = "";
+    resultEl.className = "msg";
+    setFairyIdle();
+    ctx.clearRect(0,0,confetti.width,confetti.height);
+    inputEl.focus();
+  }
+
+  document.getElementById("judgeBtn").addEventListener("click", judge);
+  inputEl.addEventListener("keydown", e => { if (e.key === "Enter") judge(); });
+
+  // 初期化
+  setFairyIdle(); inputEl.focus();
+</script>
+</body>
+</html>
